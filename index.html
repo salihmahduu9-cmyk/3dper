@@ -34,6 +34,11 @@
       width: 100%;
       height: 100%;
       background: transparent;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
     }
 
     #loading {
@@ -44,7 +49,7 @@
       align-items: center;
       justify-content: center;
 
-      color: rgba(255,255,255,0.85);
+      color: rgba(255, 255, 255, 0.85);
 
       font-family:
         Arial,
@@ -173,7 +178,7 @@ renderer.setPixelRatio(
 );
 
 
-// شفافية كاملة
+// شفافية
 
 renderer.setClearColor(
   0x000000,
@@ -186,8 +191,6 @@ renderer.setClearColor(
 renderer.outputColorSpace =
   THREE.SRGBColorSpace;
 
-
-// Tone Mapping
 
 renderer.toneMapping =
   THREE.ACESFilmicToneMapping;
@@ -204,7 +207,6 @@ document.body.appendChild(
 
 // =====================================================
 // LIGHTING
-// سماوي + أزرق فاتح
 // =====================================================
 
 
@@ -300,7 +302,7 @@ scene.add(
 
 
 // =====================================================
-// LOAD MODEL
+// MODEL
 // =====================================================
 
 const loader =
@@ -317,7 +319,7 @@ loader.load(
 
 
   // ===================================================
-  // SUCCESS
+  // MODEL LOADED
   // ===================================================
 
   function(gltf) {
@@ -332,7 +334,7 @@ loader.load(
 
 
     // =================================================
-    // CALCULATE ORIGINAL SIZE
+    // CALCULATE MODEL SIZE
     // =================================================
 
     const box =
@@ -355,7 +357,7 @@ loader.load(
 
 
     // =================================================
-    // CENTER
+    // CENTER MODEL
     // =================================================
 
     model.position.sub(
@@ -364,19 +366,11 @@ loader.load(
 
 
     // =================================================
-    // SCALE
-    //
-    // الحجم الأساسي السابق كان 3.25
-    // الآن نقسمه على 6
-    //
+    // ORIGINAL MODEL SIZE
     // =================================================
 
-    const originalTargetSize =
+    const targetSize =
       3.25;
-
-
-    const reducedTargetSize =
-      originalTargetSize / 6;
 
 
     const maxSize =
@@ -388,7 +382,7 @@ loader.load(
 
 
     const scale =
-      reducedTargetSize /
+      targetSize /
       maxSize;
 
 
@@ -398,7 +392,7 @@ loader.load(
 
 
     // =================================================
-    // CENTER AFTER SCALE
+    // CENTER AGAIN
     // =================================================
 
     const newBox =
@@ -445,9 +439,6 @@ loader.load(
               true;
 
 
-            // المحافظة على الخامة الأصلية
-            // مع تحسين الإضاءة
-
             if (
               "envMapIntensity"
               in object.material
@@ -467,36 +458,11 @@ loader.load(
 
 
     // =================================================
-    // LOADING OFF
-    // =================================================
-
-    const loading =
-      document.getElementById(
-        "loading"
-      );
-
-
-    loading.style.opacity =
-      "0";
-
-
-    setTimeout(
-      function() {
-
-        loading.style.display =
-          "none";
-
-      },
-      400
-    );
-
-
-    // =================================================
     // ROTATION
     //
-    // X فقط
+    // Z ONLY
+    // X = 0
     // Y = 0
-    // Z = 0
     // =================================================
 
     model.rotation.x =
@@ -517,24 +483,34 @@ loader.load(
       true;
 
 
-    let resumeTimer;
+    // سرعة متوسطة
+    // يمكنك تعديلها لاحقًا
 
-
-    const rotationSpeed =
-      0.003;
+    const autoRotateSpeed =
+      0.012;
 
 
     // =================================================
-    // DRAG
+    // DRAG CONTROL
     // =================================================
 
     let dragging =
       false;
 
 
-    let lastY =
+    let lastX =
       0;
 
+
+    // مقدار حساسية السحب
+
+    const dragSensitivity =
+      0.008;
+
+
+    // =================================================
+    // POINTER DOWN
+    // =================================================
 
     renderer.domElement.addEventListener(
       "pointerdown",
@@ -548,8 +524,8 @@ loader.load(
           false;
 
 
-        lastY =
-          event.clientY;
+        lastX =
+          event.clientX;
 
 
         renderer.domElement.setPointerCapture(
@@ -559,6 +535,10 @@ loader.load(
       }
     );
 
+
+    // =================================================
+    // POINTER MOVE
+    // =================================================
 
     renderer.domElement.addEventListener(
       "pointermove",
@@ -571,36 +551,44 @@ loader.load(
         }
 
 
-        const deltaY =
-          event.clientY -
-          lastY;
+        const deltaX =
+          event.clientX -
+          lastX;
 
 
-        lastY =
-          event.clientY;
-
-
-        // ==========================================
-        // X ONLY
-        // ==========================================
-
-        model.rotation.x +=
-          deltaY * 0.008;
+        lastX =
+          event.clientX;
 
 
         // ==========================================
-        // LOCK Y & Z
+        // Z ONLY
         // ==========================================
 
-        model.rotation.y =
+        model.rotation.z +=
+          deltaX *
+          dragSensitivity;
+
+
+        // ==========================================
+        // LOCK X & Y
+        // ==========================================
+
+        model.rotation.x =
           0;
 
-        model.rotation.z =
+        model.rotation.y =
           0;
 
       }
     );
 
+
+    // =================================================
+    // POINTER UP
+    //
+    // أول ما يترك السحب
+    // يرجع Auto Rotate مباشرة
+    // =================================================
 
     function stopDragging() {
 
@@ -608,21 +596,10 @@ loader.load(
         false;
 
 
-      clearTimeout(
-        resumeTimer
-      );
+      // مباشرة بدون تأخير
 
-
-      resumeTimer =
-        setTimeout(
-          function() {
-
-            autoRotate =
-              true;
-
-          },
-          2500
-        );
+      autoRotate =
+        true;
 
     }
 
@@ -641,14 +618,10 @@ loader.load(
 
     // =================================================
     // ZOOM
-    //
-    // الحد الأدنى = 1.5
-    // الحد الأقصى = 3
-    //
     // =================================================
 
     let cameraZoom =
-      2.25;
+      3;
 
 
     const MIN_ZOOM =
@@ -656,7 +629,7 @@ loader.load(
 
 
     const MAX_ZOOM =
-      3;
+      5;
 
 
     camera.position.z =
@@ -671,7 +644,8 @@ loader.load(
 
 
         cameraZoom +=
-          event.deltaY * 0.002;
+          event.deltaY *
+          0.002;
 
 
         cameraZoom =
@@ -778,7 +752,8 @@ loader.load(
           cameraZoom =
             THREE.MathUtils.clamp(
               initialCameraZoom -
-              difference * 0.01,
+              difference *
+              0.01,
               MIN_ZOOM,
               MAX_ZOOM
             );
@@ -814,6 +789,31 @@ loader.load(
 
 
     // =================================================
+    // LOADING OFF
+    // =================================================
+
+    const loading =
+      document.getElementById(
+        "loading"
+      );
+
+
+    loading.style.opacity =
+      "0";
+
+
+    setTimeout(
+      function() {
+
+        loading.style.display =
+          "none";
+
+      },
+      400
+    );
+
+
+    // =================================================
     // ANIMATION
     // =================================================
 
@@ -824,29 +824,29 @@ loader.load(
       );
 
 
-      // الدوران التلقائي
-      // X فقط
+      // ==============================================
+      // AUTO ROTATE Z ONLY
+      // ==============================================
 
       if (
         autoRotate &&
         !dragging
       ) {
 
-        model.rotation.x +=
-          rotationSpeed;
+        model.rotation.z +=
+          autoRotateSpeed;
 
       }
 
 
-      // =================================================
-      // FORCE LOCK
-      // =================================================
+      // ==============================================
+      // LOCK X & Y
+      // ==============================================
 
-      model.rotation.y =
+      model.rotation.x =
         0;
 
-
-      model.rotation.z =
+      model.rotation.y =
         0;
 
 
@@ -864,7 +864,7 @@ loader.load(
 
 
   // ===================================================
-  // LOADING
+  // LOADING PROGRESS
   // ===================================================
 
   function(xhr) {
@@ -877,7 +877,8 @@ loader.load(
         (
           xhr.loaded /
           xhr.total
-        ) * 100;
+        ) *
+        100;
 
 
       document.getElementById(
@@ -901,7 +902,7 @@ loader.load(
   function(error) {
 
     console.error(
-      "GLB Error:",
+      "GLB Loading Error:",
       error
     );
 
