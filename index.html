@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>3D Product Viewer</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(
+        circle at center,
+        #252525 0%,
+        #111111 55%,
+        #050505 100%
+      );
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      letter-spacing: 1px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #error {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      display: none;
+      z-index: 20;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="loading">جاري تحميل المنتج...</div>
+  <div id="error">تعذر تحميل الموديل 3D</div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.179.1/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+
+    import * as THREE from "three";
+
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // --------------------------------------------------
+    // إعداد المشهد
+    // --------------------------------------------------
+
+    const scene = new THREE.Scene();
+
+    // خلفية Gradient تقريبية عن طريق Fog
+    scene.fog = new THREE.Fog(0x111111, 8, 20);
+
+    // --------------------------------------------------
+    // الكاميرا
+    // --------------------------------------------------
+
+    const camera = new THREE.PerspectiveCamera(
+      35,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      1000
+    );
+
+    camera.position.set(0, 0.5, 5);
+
+    // --------------------------------------------------
+    // Renderer
+    // --------------------------------------------------
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true
+    });
+
+    renderer.setSize(
+      window.innerWidth,
+      window.innerHeight
+    );
+
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, 2)
+    );
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    document.body.appendChild(renderer.domElement);
+
+    // --------------------------------------------------
+    // إضاءة احترافية
+    // --------------------------------------------------
+
+    const ambientLight = new THREE.AmbientLight(
+      0xffffff,
+      1.8
+    );
+
+    scene.add(ambientLight);
+
+
+    // ضوء رئيسي
+    const keyLight = new THREE.DirectionalLight(
+      0xffffff,
+      4
+    );
+
+    keyLight.position.set(
+      3,
+      5,
+      4
+    );
+
+    keyLight.castShadow = true;
+
+    scene.add(keyLight);
+
+
+    // ضوء جانبي
+    const fillLight = new THREE.DirectionalLight(
+      0x9ec5ff,
+      2
+    );
+
+    fillLight.position.set(
+      -4,
+      2,
+      2
+    );
+
+    scene.add(fillLight);
+
+
+    // ضوء خلفي
+    const rimLight = new THREE.DirectionalLight(
+      0xffd6b0,
+      3
+    );
+
+    rimLight.position.set(
+      2,
+      3,
+      -5
+    );
+
+    scene.add(rimLight);
+
+
+    // --------------------------------------------------
+    // أرضية بسيطة لإعطاء عمق
+    // --------------------------------------------------
+
+    const floorGeometry =
+      new THREE.CircleGeometry(5, 64);
+
+    const floorMaterial =
+      new THREE.ShadowMaterial({
+        opacity: 0.25
+      });
+
+    const floor =
+      new THREE.Mesh(
+        floorGeometry,
+        floorMaterial
+      );
+
+    floor.rotation.x = -Math.PI / 2;
+
+    floor.position.y = -1.5;
+
+    floor.receiveShadow = true;
+
+    scene.add(floor);
+
+
+    // --------------------------------------------------
+    // Controls
+    // --------------------------------------------------
+
+    const controls =
+      new OrbitControls(
+        camera,
+        renderer.domElement
+      );
+
+    controls.enableDamping = true;
+
+    controls.dampingFactor = 0.06;
+
+    // دوران أفقي وعمودي
+    controls.enableRotate = true;
+
+    // Zoom
+    controls.enableZoom = true;
+
+    // منع قلب المنتج بشكل مزعج
+    controls.minPolarAngle = 0.4;
+    controls.maxPolarAngle = Math.PI - 0.4;
+
+    // حدود الزوم
+    controls.minDistance = 1.5;
+    controls.maxDistance = 8;
+
+    // لا تحرك الكاميرا جانبياً
+    controls.enablePan = false;
+
+
+    // --------------------------------------------------
+    // تحميل GLB
+    // --------------------------------------------------
+
+    const loader =
+      new GLTFLoader();
+
+
+    const MODEL_URL =
+      "https://raw.githubusercontent.com/salihmahduu9-cmyk/3dper/refs/heads/main/jean-paul_gaultier_le_male_bottle.glb";
+
+
+    loader.load(
+
+      MODEL_URL,
+
+      function (gltf) {
+
+        const model = gltf.scene;
+
+        scene.add(model);
+
+
+        // ----------------------------------------------
+        // حساب حجم الموديل
+        // ----------------------------------------------
+
+        const box =
+          new THREE.Box3()
+            .setFromObject(model);
+
+        const size =
+          box.getSize(
+            new THREE.Vector3()
+          );
+
+        const center =
+          box.getCenter(
+            new THREE.Vector3()
+          );
+
+
+        // وضع الموديل في المنتصف
+
+        model.position.x -= center.x;
+        model.position.y -= center.y;
+        model.position.z -= center.z;
+
+
+        // ----------------------------------------------
+        // تصغير/تكبير تلقائي
+        // ----------------------------------------------
+
+        const maxSize =
+          Math.max(
+            size.x,
+            size.y,
+            size.z
+          );
+
+        const targetSize = 3;
+
+        const scale =
+          targetSize / maxSize;
+
+        model.scale.setScalar(scale);
+
+
+        // ----------------------------------------------
+        // إعادة حساب المركز بعد الـ Scale
+        // ----------------------------------------------
+
+        const scaledBox =
+          new THREE.Box3()
+            .setFromObject(model);
+
+        const scaledCenter =
+          scaledBox.getCenter(
+            new THREE.Vector3()
+          );
+
+        model.position.sub(
+          scaledCenter
+        );
+
+
+        // ----------------------------------------------
+        // Shadows
+        // ----------------------------------------------
+
+        model.traverse(
+          function (object) {
+
+            if (object.isMesh) {
+
+              object.castShadow = true;
+
+              object.receiveShadow = true;
+
+              if (object.material) {
+
+                object.material.needsUpdate =
+                  true;
+
+              }
+
+            }
+
+          }
+        );
+
+
+        // ----------------------------------------------
+        // ضبط الكاميرا
+        // ----------------------------------------------
+
+        camera.position.set(
+          0,
+          0.2,
+          5
+        );
+
+        controls.target.set(
+          0,
+          0,
+          0
+        );
+
+        controls.update();
+
+
+        // ----------------------------------------------
+        // إخفاء Loading
+        // ----------------------------------------------
+
+        document.getElementById(
+          "loading"
+        ).style.display = "none";
+
+
+        // ----------------------------------------------
+        // دوران تلقائي
+        // ----------------------------------------------
+
+        let autoRotate = true;
+
+        function animate() {
+
+          requestAnimationFrame(
+            animate
+          );
+
+
+          if (autoRotate) {
+
+            model.rotation.y += 0.003;
+
+          }
+
+
+          controls.update();
+
+          renderer.render(
+            scene,
+            camera
+          );
+
+        }
+
+        animate();
+
+
+        // ----------------------------------------------
+        // إيقاف الدوران التلقائي عند التفاعل
+        // ----------------------------------------------
+
+        controls.addEventListener(
+          "start",
+          function () {
+
+            autoRotate = false;
+
+          }
+        );
+
+
+        controls.addEventListener(
+          "end",
+          function () {
+
+            // يرجع الدوران بعد ثانيتين
+
+            setTimeout(
+              function () {
+
+                autoRotate = true;
+
+              },
+              2000
+            );
+
+          }
+        );
+
+      },
+
+      // Progress
+
+      function (xhr) {
+
+        if (xhr.total) {
+
+          const percent =
+            (xhr.loaded / xhr.total) * 100;
+
+          document.getElementById(
+            "loading"
+          ).textContent =
+            "جاري التحميل " +
+            Math.round(percent) +
+            "%";
+
+        }
+
+      },
+
+      // Error
+
+      function (error) {
+
+        console.error(
+          "GLB Loading Error:",
+          error
+        );
+
+        document.getElementById(
+          "loading"
+        ).style.display = "none";
+
+        document.getElementById(
+          "error"
+        ).style.display = "block";
+
+      }
+
+    );
+
+
+    // --------------------------------------------------
+    // Responsive
+    // --------------------------------------------------
+
+    window.addEventListener(
+      "resize",
+      function () {
+
+        camera.aspect =
+          window.innerWidth /
+          window.innerHeight;
+
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(
+          window.innerWidth,
+          window.innerHeight
+        );
+
+      }
+    );
+
+  </script>
+
+</body>
+</html>
